@@ -73,3 +73,41 @@ Findings while testing:
 6. Submit via https://nutnovember.org/form on 26 Nov (not the 27th).
 7. After it is on GitHub: share on X (@0xbcw_) with #NutNovember, repo
    link + demo (per Eoet, 8 Nov 2026). Do NOT post before the repo is live.
+
+## Nostr profile lookup fix — 8 Nov 2026 (evening, after Vercel deploy)
+
+- Live failure: real npubs jack (npub1sg6…) and fiatjaf (npub180c…) showed
+  "Could not load Nostr profile: Timed out connecting to Nostr relays"
+  after ~20-25s on https://nuttip-1pt6i3eo9-0xbcw.vercel.app. Tip form
+  and navigation worked; only the profile fetch failed.
+- Root cause (confirmed in NDK 2.13 source): `NDKPool.connect()` only
+  resolves when *every* configured relay is CONNECTED. The old code called
+  `ndk.connect()` with no timeout, so one slow/dead relay blocked the
+  whole lookup. (The old 8s `Promise.race` rejected the lookup instead of
+  letting a partial connection through.)
+- Fix (`src/lib/nostr.ts`, no new deps, no backend/env vars):
+  - `ndk.connect(6000)` — NDK's own timeout: resolves when it elapses even
+    if only some relays are up; connection continues in the background.
+  - Relay kind-0 fetch raced at 5s.
+  - HTTP fallback in parallel: nostr.band API
+    (`api.nostr.band/v0/profile/<hex>`, wrapped or bare JSON) and njump.me
+    profile page Open Graph tags (`og:title`/`og:image`/`og:description`).
+    First usable profile wins.
+  - A missing profile is never an error any more: `fetchCreatorProfile()`
+    resolves a bare { npub, hexpubkey } profile and TipPage falls back to
+    showing the npub. Only an invalid npub/hex throws. Whole lookup is
+    capped at 20s (typical failure in this VM ~11s).
+- Verification in this VM (`node scripts/test-nostr-fix.mjs`, new script):
+  `pnpm build` PASS. jack resolved in ~8s WITH name + picture via the HTTP
+  fallback (relays blocked here) — the fallback path is proven live.
+  fiatjaf degraded gracefully in ~11s (bare profile, console warning, no
+  throw, no hang). Invalid npub still throws as expected.
+- NOT verifiable from this VM: relay path in a real browser (websocket
+  egress blocked here), and the nostr.band API specifically (blocked here
+  with empty replies; njump.me is the fallback that demonstrably works).
+- **Must be re-checked in a browser on the deployed site after redeploy:**
+  open /tip/<real npub> for jack and fiatjaf and confirm name/avatar load
+  quickly (seconds, not ~20s). Redeploy = upload changed files to GitHub
+  (Vercel auto-deploys main): `src/lib/nostr.ts`,
+  `scripts/test-nostr-fix.mjs`, `scripts/test-nostr.mjs` (comment only),
+  `TEST_REPORT.md`.
