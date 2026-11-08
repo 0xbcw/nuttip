@@ -4,8 +4,11 @@ import { generateSecretKey, getPublicKey, nip19 } from 'nostr-tools';
 // return null — this only proves relay connect + query round-trip works.
 // NOTE (8 Nov 2026): in this sandbox VM, ndk.connect() hung with no output
 // for 60s+ (websocket egress to relays appears blocked here). The app's
-// fetchCreatorProfile now races connect against a timeout so the UI cannot
-// hang. Re-run this script from a normal network / browser to verify live. 
+// fetchCreatorProfile now calls ndk.connect(6000) (NDK resolves on timeout
+// even if only some relays are up) and falls back to HTTP profile caches,
+// so the UI cannot hang. Use scripts/test-nostr-fix.mjs for the app-level
+// check; re-run this script from a normal network / browser to verify the
+// raw relay round-trip live.
 const sk = generateSecretKey();
 const hex = getPublicKey(sk);
 console.log('test npub:', nip19.npubEncode(hex));
