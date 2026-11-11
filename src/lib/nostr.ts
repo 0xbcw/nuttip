@@ -72,7 +72,7 @@ export function hexToNpub(hexpubkey: string): string {
 
 let sharedNdk: NDK | null = null;
 
-function getNdk(): NDK {
+export function getNdk(): NDK {
   if (!sharedNdk) {
     sharedNdk = new NDK({ explicitRelayUrls: DEFAULT_RELAYS });
   }

@@ -13,6 +13,7 @@ import {
   getEncodedToken,
   getDecodedToken,
   sumProofs,
+  type P2PKOptions,
   type Proof,
 } from '@cashu/cashu-ts';
 
@@ -82,6 +83,20 @@ export async function splitForSend(
   amount: number,
 ): Promise<{ keep: Proof[]; send: Proof[] }> {
   return wallet.ops.send(amount, proofs).includeFees(true).run();
+}
+
+/**
+ * Split proofs into a P2PK-locked sendable amount; returns { keep, send }.
+ * The `send` proofs are locked to the spending condition in `p2pk`
+ * (e.g. a nut zap lock); the `keep` (change) proofs stay bearer.
+ */
+export async function splitForSendLocked(
+  wallet: Wallet,
+  proofs: Proof[],
+  amount: number,
+  p2pk: P2PKOptions,
+): Promise<{ keep: Proof[]; send: Proof[] }> {
+  return wallet.ops.send(amount, proofs).includeFees(true).asLocked(p2pk).run();
 }
 
 /** Encode proofs as a Cashu token string (cashuA…), with an optional memo. */
