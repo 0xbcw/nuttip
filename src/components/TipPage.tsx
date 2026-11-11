@@ -1,8 +1,13 @@
 import { useEffect, useState } from 'react';
 import {
   fetchCreatorProfile,
+  parseNpub,
   type CreatorProfile,
 } from '../lib/nostr';
+import {
+  fetchNutzapInfo,
+  type NutzapInfo,
+} from '../lib/nutzap';
 import {
   DEFAULT_MINT,
   getWallet,
@@ -27,6 +32,7 @@ interface TipPageProps {
 export default function TipPage({ npub, token }: TipPageProps) {
   const [profile, setProfile] = useState<CreatorProfile | null>(null);
   const [profileError, setProfileError] = useState('');
+  const [nutzapInfo, setNutzapInfo] = useState<NutzapInfo | null>(null);
   const [claimStatus, setClaimStatus] = useState('');
   const [claimed, setClaimed] = useState<number | null>(null);
   const [claimError, setClaimError] = useState('');
@@ -40,6 +46,29 @@ export default function TipPage({ npub, token }: TipPageProps) {
       .catch((e: unknown) => {
         if (!cancelled)
           setProfileError(e instanceof Error ? e.message : String(e));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [npub]);
+
+  // Nut zap availability (kind:10019) is looked up alongside the profile.
+  // Null is the normal case — most creators publish none, and the page
+  // then offers the token tip only. A failed lookup is never an error.
+  useEffect(() => {
+    let cancelled = false;
+    let hex: string;
+    try {
+      hex = parseNpub(npub);
+    } catch {
+      return;
+    }
+    fetchNutzapInfo(hex)
+      .then((info) => {
+        if (!cancelled) setNutzapInfo(info);
+      })
+      .catch(() => {
+        // Lookup failure = no nut zap; token tip stays available.
       });
     return () => {
       cancelled = true;
@@ -101,7 +130,7 @@ export default function TipPage({ npub, token }: TipPageProps) {
         </div>
       )}
 
-      <TipForm npub={npub} creatorName={displayName} />
+      <TipForm npub={npub} creatorName={displayName} nutzapInfo={nutzapInfo} />
     </section>
   );
 }
