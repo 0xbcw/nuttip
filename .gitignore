@@ -4,3 +4,7 @@ dist/
 .env.local
 *.local
 .DS_Store
+# Throwaway test identity for the nut zap demo (contains a private key).
+# NEVER commit or share it; test sats only, testnut only.
+scripts/test-identity.json
+scripts/.nutzap-bundle.cjs

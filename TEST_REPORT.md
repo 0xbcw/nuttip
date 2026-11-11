@@ -111,3 +111,72 @@ Findings while testing:
   (Vercel auto-deploys main): `src/lib/nostr.ts`,
   `scripts/test-nostr-fix.mjs`, `scripts/test-nostr.mjs` (comment only),
   `TEST_REPORT.md`.
+
+## Nut zap (NIP-61) one-tap tip — BUILT 12 Nov 2026, verified locally
+
+Eoet tapped "Build the nut zap now" 12 Nov 2026 (see the "Add one-tap
+Cashu tip" commit in `git log`). Test sats only, testnut only; token tip
+untouched as the fallback everywhere.
+
+What changed: new `src/lib/nutzap.ts` (`fetchNutzapInfo`,
+`parseNutzapInfoEvent`, `pickNutzapMint`, `createEphemeralSigner`,
+`buildNutzapLock`, `buildNutzapEvent`, `publishNutzapEvent`,
+`sendNutzap`, pending-zap localStorage helpers, `NutzapError` with a
+`locked` flag); `TipForm` gains the one-tap box + "⚡ Nut zap sent"
+result + locked-but-unpublished retry UI; `TipPage` fetches kind:10019
+alongside the profile (null = token tip only, lookup failure never an
+error); `src/lib/cashu.ts` gains `splitForSendLocked()`;
+`src/lib/nostr.ts` exports `getNdk()`; `.nutzap-box` style in
+`src/index.css`. New scripts: `scripts/test-nutzap.mjs` (verification)
+and `scripts/test-nutzap-identity.mjs` (throwaway test identity).
+
+Design (per NUTZAP_PLAN.md): a nut zap is only offered when the creator
+publishes kind:10019 listing a mint NutTip can use (testnut). The tip is
+minted on the listed mint, P2PK-locked to the pubkey in kind:10019
+("02" prefix), refund pubkey + lockUntil (+7 days) to the ephemeral
+sender key, then kind:9321 is published (ephemeral in-browser keypair
+per tip, discarded except its secret saved with the locked token for
+refunds). The `u` tag carries the mint URL exactly as listed.
+jack publishes no kind:10019 (verified 11 Nov), so his page shows only
+the token tip — as before.
+
+Verification in this VM, `node scripts/test-nutzap.mjs` — **all
+VM-verifiable checks PASSED** (exit 0):
+- testnut /v1/info: NUT-11 supported.
+- Mint 21 sats → P2PK-locked send 10 (send proofs 11 incl. 1 sat input
+  fee, keep 9) → locked proof secret is P2PK, data = `02<lock pubkey>`,
+  refund tag + locktime tag present.
+- Locked token CANNOT be received with a wrong key; received with the
+  lock key → exactly 10 sats.
+- kind:10019 parse/pick (real code, synthetic events): full event,
+  testnut picked, USD-only mint skipped, no pubkey tag falls back to
+  recipient hex, no mints → null, trailing-slash URL still matches.
+- kind:9321 event (real code): kind 9321, amount 10, unit sat, `u` =
+  listed mint verbatim, `p` = recipient, proof tags match the locked
+  proofs, no `e` tag.
+- `pnpm test:cashu` re-run 12 Nov 2026 — **PASS** (mint → send → receive,
+  21 in / 10 received). Token tip path unchanged and working.
+- `pnpm build` — **PASS** (tsc + vite; only the pre-existing chunk-size
+  warning).
+
+NOT verifiable from this VM (honest gap): kind:10019 fetch from real
+relays and kind:9321 publish both fail here — relay websockets are
+blocked (publish attempt timed out after 10s; `fetchNutzapInfo(jack)`
+returned null). Both need a real browser on the live site.
+
+Throwaway test identity: `node scripts/test-nutzap-identity.mjs`
+generated a fresh test-only npub
+`npub15j2l90pzsjc7cpvzr7w4s6m0fqp8kjcujuq0gq78fyg5h90czjms0znqja`
+(hex `a495f2bc2284b1ec05821f9d586b6f48027b4b1c9700f403c749114b95f814b7`),
+tip page https://nuttip.vercel.app/tip/npub15j2l90pzsjc7cpvzr7w4s6m0fqp8kjcujuq0gq78fyg5h90czjms0znqja.
+Its kind:10019 (testnut, sats) is in `scripts/test-identity.json`
+(mode 600, gitignored — contains the nsec, NEVER commit or share).
+Publish from the VM failed as expected (12s timeout) — publish it from
+a real browser (instructions in the file), then tip the test npub end
+to end and confirm the ⚡ box appears and kind:9321 publishes.
+
+Still to do (parent agent): upload changed files to GitHub as 0xbcw
+(Vercel auto-deploys main), verify live at https://nuttip.vercel.app
+only (never the stale Vercel-auth URL), publish the test identity's
+kind:10019 from a real browser, tip the test npub end to end in a real
+browser.
